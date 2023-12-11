@@ -7,7 +7,7 @@ import streamlit as sl
 # API key connection
 
 def API_connect():
-    api_id = "AIzaSyBi31OnlFZ1X2rXJefRsexzVbt_vxb6EeM"
+    api_id = "AIzaSyALJrJlh6qNx6WaB9QoUz4R4tQz6A7Y9qw"
     api_service = "YouTube"
     api_version = "v3"
 
@@ -49,23 +49,30 @@ def Get_Video_IDs(chan_id):
                     )
     resp = req.execute()
 
-    playlist_id = resp['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+    if 'items' in resp and resp['items']:
+        playlist_id = resp['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+    else:
+        playlist_id = None  # or handle the case when 'items' or other keys are missing
 
     nxt_page_tok = None
+
     vid_ids = []
 
-    while True:
-        req_1 = youtu.playlistItems().list(
-                        part = 'snippet', playlistId = playlist_id, maxResults = 50,pageToken = nxt_page_tok)
-        resp_1 = req_1.execute()
-        
-        for i in range(len(resp_1['items'])):
-            vid_ids.append(resp_1['items'][i]['snippet']['resourceId']['videoId'])
-        
-        nxt_page_tok = resp_1.get('nextPageToken')
+    if playlist_id:
+        while True:
+            req_1 = youtu.playlistItems().list(
+                            part = 'snippet', playlistId = playlist_id, maxResults = 50,pageToken = nxt_page_tok)
+            resp_1 = req_1.execute()
+            
+            for i in range(len(resp_1['items'])):
+                vid_ids.append(resp_1['items'][i]['snippet']['resourceId']['videoId'])
+            
+            nxt_page_tok = resp_1.get('nextPageToken')
 
-        if nxt_page_tok is None:
-            break
+            if nxt_page_tok is None:
+                break
+    else:
+        pass
         
     return vid_ids
 
@@ -149,8 +156,8 @@ def Get_Comment_Info(video_ids):
 # Python and MONGODB Connection
 
 client = pymongo.MongoClient('mongodb://localhost:27017')
-youTu_DB = client['My_Try']
-colle = youTu_DB['YT Channels']
+youTu_DB = client['My_Proj_1']
+colle = youTu_DB['YT__Channels']
 
 # Variabling Functions
 def Channel_DET(chan_id):
@@ -167,11 +174,11 @@ def Channel_DET(chan_id):
 
     return 'Upload Done Successfully'
 
-def Channel_Table():
+def Channel_Table(selected_channel):
     # Table Creation for Channels in MY SQL 
     # MYSQL - PYTHON Connection
 
-    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Try')
+    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Proj_1')
     cursor = mysqlconnection.cursor()
 
     try:
@@ -183,22 +190,23 @@ def Channel_Table():
 
     except:
         print("Channels Table already Created")
-        
-    # Connecting MONGODB to PYTHON PANDAS 
-    #and
-    #connecting to the Database and Collections 
-    
-    client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
     
     #Conversion of MongoDB list to DataFrame
-    
-    ch_list = []
+    global ch_li
+    ch_li = []
     for ch_data in colle.find({},{"_id":0,"channel_Information":1}):
-        ch_list.append(ch_data["channel_Information"])
+        ch_li.append(ch_data['channel_Information']['Channel_Name'])
 
-    df = pd.DataFrame(ch_list)
+    ch_liisst = []
+    for ch_data in colle.find({},{"_id":0,"channel_Information":1}):
+        ch_liisst.append(ch_data["channel_Information"])
+
+    chan_df = []
+    for i in range(len(ch_liisst)):
+        if ch_liisst[i]['Channel_Name'] == selected_channel:
+            chan_df.append(ch_liisst[i])
+
+    df = pd.DataFrame(chan_df)
     
     # Inserting the Values into the Table Columns we created
 
@@ -209,9 +217,9 @@ def Channel_Table():
         mysqlconnection.commit()
 
 
-def Playlists_Table():
+def Playlists_Table(selected_channel):
 
-    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Try')
+    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Proj_1')
     cursor = mysqlconnection.cursor()
 
     create_table = '''create table if not exists Playlists(Channel_Id varchar(30),Channel_Name varchar(30),Playlist_ID varchar(50),
@@ -219,18 +227,17 @@ def Playlists_Table():
     cursor.execute(create_table)   
     mysqlconnection.commit()
 
-    # Connecting MONGODB to PYTHON PANDAS
-
-    client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
-
-    #Conversion of MongoDB list to DataFrame
+    #Conversion of MongoDB list to Stream lit DataFrame
+    global ch_li
+    ch_li = []
+    for ch_data in colle.find({},{"_id":0,"channel_Information":1}):
+        ch_li.append(ch_data['channel_Information']['Channel_Name'])
 
     Play_list = []
     for pl_data in colle.find({},{"_id":0,"Playlist_Information":1}):
         for i in range(len(pl_data['Playlist_Information'])):
-            Play_list.append(pl_data['Playlist_Information'][i])
+            if pl_data['Playlist_Information'][i]['Channel_Name'] == selected_channel:
+                Play_list.append(pl_data['Playlist_Information'][i])
 
     df1 = pd.DataFrame(Play_list)
 
@@ -243,8 +250,8 @@ def Playlists_Table():
         mysqlconnection.commit()
 
 
-def Videos_Table():
-    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Try')
+def Videos_Table(selected_channel):
+    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Proj_1')
     cursor = mysqlconnection.cursor()
 
     create_table = '''create table if not exists Videos(Channel_Name varchar(30),Channel_Id varchar(30) ,Video_ID varchar(50) primary key,
@@ -253,15 +260,21 @@ def Videos_Table():
     cursor.execute(create_table)   
     mysqlconnection.commit()
 
-    # Connecting MONGODB to PYTHON PANDAS
-    client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
+    #Conversion of MongoDB list to Stream lit DataFrame
+    global ch_li
+    ch_li = []
+    for ch_data in colle.find({},{"_id":0,"channel_Information":1}):
+        ch_li.append(ch_data['channel_Information']['Channel_Name'])
 
-    Vid_list = []
+    Vid_list = [] 
+    global video_ids
+    video_ids = []
     for vid_data in colle.find({},{"_id":0,"Video_Information":1}):
         for i in range(len(vid_data['Video_Information'])):
-            Vid_list.append(vid_data['Video_Information'][i])
+            if vid_data['Video_Information'][i]['Channel_Name'] == selected_channel:
+                Vid_list.append(vid_data['Video_Information'][i])
+                video_ids.append(vid_data['Video_Information'][i]['Video_ID'])
+
 
     df2 = pd.DataFrame(Vid_list)
 
@@ -274,9 +287,10 @@ def Videos_Table():
         cursor.execute(sql, values)
         mysqlconnection.commit()
 
-def Comments_Table():
+
+def Comments_Table(video_ids):
      
-    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Try')
+    mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Proj_1')
     cursor = mysqlconnection.cursor()
 
     create_table = '''create table if not exists Comments(Video_ID varchar(30),Comment_ID varchar(30),
@@ -286,19 +300,13 @@ def Comments_Table():
     cursor.execute(create_table)   
     mysqlconnection.commit()
 
-
-    # Connecting MONGODB to PYTHON PANDAS
-
-    client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
-
     #Conversion of MongoDB list to DataFrame
 
     Com_list = []
     for com_data in colle.find({},{"_id":0,"Comment_Information":1}):
         for i in range(len(com_data['Comment_Information'])):
-            Com_list.append(com_data['Comment_Information'][i])
+            if com_data['Comment_Information'][i]['Video_ID'] in video_ids: 
+                Com_list.append(com_data['Comment_Information'][i])
 
     df3 = pd.DataFrame(Com_list)
 
@@ -311,18 +319,10 @@ def Comments_Table():
         cursor.execute(sql,values)
         mysqlconnection.commit()
 
-def Tables():
-    Channel_Table()
-    Playlists_Table()
-    Videos_Table()
-    Comments_Table()
-
-    return 'Table Created Successfully.'
-
 def show_Chan_Tab() :
     client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
+    youTu_DB = client['My_Proj_1']
+    colle = youTu_DB['YT__Channels']
 
     #Conversion of MongoDB list to Stream lit DataFrame
 
@@ -336,8 +336,8 @@ def show_Chan_Tab() :
 
 def show_Play_Tab():
     client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
+    youTu_DB = client['My_Proj_1']
+    colle = youTu_DB['YT__Channels']
 
     #Conversion of MongoDB list to DataFrame
 
@@ -352,8 +352,8 @@ def show_Play_Tab():
 
 def show_Vid_Tab():
     client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
+    youTu_DB = client['My_Proj_1']
+    colle = youTu_DB['YT__Channels']
 
     Vid_list = []
     for vid_data in colle.find({},{"_id":0,"Video_Information":1}):
@@ -366,8 +366,8 @@ def show_Vid_Tab():
 
 def show_Com_Tab():
     client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
+    youTu_DB = client['My_Proj_1']
+    colle = youTu_DB['YT__Channels']
 
     #Conversion of MongoDB list to DataFrame
 
@@ -380,7 +380,21 @@ def show_Com_Tab():
 
     return df3
 
+def Tables(selected_channel):
+    Channel_Table(selected_channel)
+    Playlists_Table(selected_channel)
+    Videos_Table(selected_channel)
+    Comments_Table(video_ids)
+
+    return 'Table Created Successfully.'
+
 # StreamLit Part 
+
+global video_ids
+video_ids = []
+for vid in colle.find({},{"_id":0,"Video_Information":1}):
+    for i in vid['Video_Information']:
+        video_ids.append(i['Video_ID'])
 
 with sl.sidebar:
     sl.title(":green[YOUTUBE DATA HARVESTING AND WAREHOUSING]")
@@ -394,11 +408,11 @@ with sl.sidebar:
 channel_id = sl.text_input("Enter the Channel ID ")
 
 if sl.button("Click and Store the Data"):
-    ch_ids = ["UCb6TKw-7IY1s4wjCpXNQC_g","UCbgupQ_zSnEpa_0zhCR2CIQ","UC-O3_F-UpwzKvSkvO0DW9qg","UCuI5XcJYynHa5k_lqDzAgwQ","UC0BZOldbDqN3zrhXERSMimA"]
+    ch_ids = []
 
     client = pymongo.MongoClient('mongodb://localhost:27017')
-    youTu_DB = client['My_Try']
-    colle = youTu_DB['YT Channels']
+    youTu_DB = client['My_Proj_1']
+    colle = youTu_DB['YT__Channels']
 
     for ch_data in colle.find({},{"_id":0,"channel_Information":1}):
         ch_ids.append(ch_data['channel_Information']['Channel_Id'])
@@ -409,9 +423,20 @@ if sl.button("Click and Store the Data"):
         insert = Channel_DET(channel_id)
         sl.success(insert)
 
+# Create a dropdown for channel selection
+global selected_channel
+global ch_li
+
+ch_li = []
+for ch_data in colle.find({},{"_id":0,"channel_Information":1}):
+    ch_li.append(ch_data['channel_Information']['Channel_Name'])
+
+selected_channel = sl.selectbox('Select a Channel to migrate the Details into SQL:',ch_li)
+sl.write(f"You selected: {selected_channel}")
+
 if sl.button("Migrate to SQL"):
-    Tables = Tables()
-    sl.success(Tables)
+    tables = Tables(selected_channel)
+    sl.success(tables)
 
 show_table = sl.radio("Select the Table for View",("CHANNELS","PLAYLISTS","VIDEOS","COMMENTS"))
 
@@ -425,7 +450,7 @@ else:
     show_Com_Tab()
     
 #SQL Connection 
-mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Try')
+mysqlconnection = pymysql.connect(host = '127.0.0.1', user = 'root', passwd = 'loveforcoding.2492',database = 'My_Proj_1')
 cursor = mysqlconnection.cursor()
 
 quest = sl.selectbox("Select your Questions",("1. All the Videos and the Channel Name",
